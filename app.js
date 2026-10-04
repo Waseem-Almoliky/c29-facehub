@@ -1,4 +1,4 @@
-import {C29, supported} from './c29ble.js';
+import {C29, supported, rgb565Background} from './c29ble.js';
 import * as face from './face.js';
 
 const $ = s => document.querySelector(s);
@@ -139,11 +139,12 @@ async function renderWatch(m) {
       ${watch.connected ? 'Tap a slot to show it.' : 'Connect to switch faces.'}</p>
     <div class="grid" id="slots"></div>
     <div id="job" style="margin-top:14px"></div>
+    <button class="btn ghost" id="bg" style="margin-top:14px">🖼 Put your photo on face 2</button>
     <h2>Quick install</h2><div class="grid" id="quick"></div>`;
   const slots = $('#slots');
   for (let n = 1; n <= 8; n++) {
-    const img = n === 8 && inst ? previewUrl(inst) : '';
-    const el = card(img, n === 8 ? (inst ? inst.name : 'Custom') : 'Built-in ' + n, cur === n ? 'showing' : '', async () => {
+    const img = n === 8 && inst ? previewUrl(inst) : n === 2 ? pref('bgThumb') || '' : '';
+    const el = card(img, n === 8 ? (inst ? inst.name : 'Custom') : n === 2 ? 'Your photo' : 'Built-in ' + n, cur === n ? 'showing' : '', async () => {
       if (busy || !await ensureConnected()) return;
       busy = true;
       try { const now = await watch.showFace(n); pref('current', now); if (now !== n) toast(`Watch stayed on face ${now}`, true); }
@@ -153,6 +154,7 @@ async function renderWatch(m) {
     if (!img) el.querySelector('.dial').textContent = n;
     slots.appendChild(el);
   }
+  $('#bg').onclick = openBackground;
   const quick = $('#quick');
   const list = faces.filter(f => f.fav).concat(faces.filter(f => !f.fav)).slice(0, 9);
   if (!list.length) quick.outerHTML = '<div class="empty">No faces yet.<br>Get some from the Store, or import .bin files in My faces.</div>';
@@ -238,6 +240,86 @@ function openStore(f) {
     try { await install(await get()); closeSheet(); } catch (err) { toast(err.message, true); }
     e.target.disabled = false; e.target.textContent = 'Download & install';
   };
+}
+
+// Built-in face 2 is customisable: background photo, time colour/position, two info lines.
+function openBackground() {
+  const INFO = ['none', 'date', 'sleep', 'heart rate', 'steps'];
+  const opts = sel => INFO.map((t, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${t}</option>`).join('');
+  const L = pref('bgLayout') || {pos: 0, top: 1, bottom: 4, colour: '#FFFFFF'};
+  const s = sheet(`<div class="title">Face 2: your photo</div>
+    <div class="meta">Background, time colour and info lines for built-in face 2</div>
+    <div class="big"><canvas id="bgc" width="360" height="360" class="dial" style="display:block"></canvas></div>
+    <label class="btn ghost" style="text-align:center">Choose a photo…<input type="file" id="bgf" accept="image/*" hidden></label>
+    <div class="box"><b>Time colour</b>
+      <div class="sw" style="margin-top:10px">${SWATCHES.map(c => `<i data-c="${c}" style="background:${c}"></i>`).join('')}<input type="color" id="tc" value="${L.colour}"></div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center">
+        <span>Time at</span><select id="pos"><option value="0">top</option><option value="1" ${L.pos === 1 ? 'selected' : ''}>bottom</option></select>
+        <span>Above</span><select id="top">${opts(L.top)}</select>
+        <span>Below</span><select id="bot">${opts(L.bottom)}</select></div></div>
+    <div id="job"></div>
+    <button class="btn primary" id="send" disabled>Send photo + layout</button>
+    <button class="btn ghost" id="lay">Update layout only</button>`);
+  s.querySelectorAll('select').forEach(x => Object.assign(x.style, {background: 'var(--bg)', color: 'var(--ink)', border: '1px solid var(--line)', borderRadius: '8px', padding: '8px', font: 'inherit'}));
+  const cv = s.querySelector('#bgc'), ctx = cv.getContext('2d');
+  const photo = document.createElement('canvas'); photo.width = photo.height = 360;
+  let hasPhoto = false, colour = L.colour;
+  const layout = () => ({pos: +s.querySelector('#pos').value, top: +s.querySelector('#top').value, bottom: +s.querySelector('#bot').value, colour});
+  const draw = () => {
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, 360, 360);
+    if (hasPhoto) ctx.drawImage(photo, 0, 0);
+    const l = layout(), y = l.pos === 0 ? 150 : 270, lab = ['', 'SEP 28', '7h 20m', '♥ 72', '8421'];
+    ctx.fillStyle = colour; ctx.textAlign = 'center'; ctx.font = 'bold 84px system-ui'; ctx.fillText('10:09', 180, y);
+    ctx.font = '24px system-ui'; ctx.fillText(lab[l.top], 180, y - 92); ctx.fillText(lab[l.bottom], 180, y + 40);
+  };
+  draw();
+  s.querySelector('#bgf').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const im = new Image();
+    im.onload = () => {
+      const side = Math.min(im.width, im.height);
+      photo.getContext('2d').drawImage(im, (im.width - side) / 2, (im.height - side) / 2, side, side, 0, 0, 360, 360);
+      hasPhoto = true; s.querySelector('#send').disabled = false; draw();
+    };
+    im.src = URL.createObjectURL(f);
+  };
+  s.querySelectorAll('select').forEach(x => x.onchange = draw);
+  s.querySelectorAll('.sw i').forEach(i => i.onclick = () => { colour = i.dataset.c; s.querySelector('#tc').value = colour; draw(); });
+  s.querySelector('#tc').oninput = e => { colour = e.target.value; draw(); };
+
+  const go = async withPhoto => {
+    if (busy || !await ensureConnected()) return;
+    busy = true;
+    const box = s.querySelector('#job');
+    let pct = 0;
+    const show = msg => { box.innerHTML = `<div class="box"><b>${msg}</b>${withPhoto ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}</div>`; };
+    show('Connecting…');
+    try {
+      const info = await watch.queryLayout();
+      if (!info) throw new Error('the watch did not report a customisable face');
+      let tag = info.md5;
+      if (withPhoto) {
+        const data = rgb565Background(photo, info.w || 360, info.thumbW || 200);
+        tag = [...new Uint8Array(await crypto.subtle.digest('SHA-256', data))].slice(0, 16).map(b => b.toString(16).padStart(2, '0')).join('');
+        if (!await watch.uploadBackground(data, p => { pct = p; show(`Sending photo… ${p}%`); })) throw new Error('the watch rejected the photo (checksum)');
+        const t = document.createElement('canvas'); t.width = t.height = 120;
+        t.getContext('2d').drawImage(photo, 0, 0, 120, 120);
+        pref('bgThumb', t.toDataURL('image/jpeg', 0.8));
+      }
+      const l = layout(), [r, g, b] = face.hexRgb(colour);
+      await watch.setLayout({...l, colour: (r >> 3) << 11 | (g >> 2) << 5 | (b >> 3)}, tag);
+      pref('bgLayout', l);
+      const now = await watch.showFace(2); pref('current', now);
+      toast(withPhoto ? 'Photo face updated ✓' : 'Layout updated ✓');
+      closeSheet();
+    } catch (e) {
+      toast('Failed: ' + e.message, true); box.innerHTML = '';
+    } finally {
+      busy = false; if (tab === 'watch') render();
+    }
+  };
+  s.querySelector('#send').onclick = () => go(true);
+  s.querySelector('#lay').onclick = () => go(false);
 }
 
 function openFace(f) {

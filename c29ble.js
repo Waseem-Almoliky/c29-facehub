@@ -109,6 +109,55 @@ export class C29 {
     return this.currentFace();
   }
 
+  // ---- customisable built-in face (face 2 on the C29) ----
+  // 39 -> layout; 6E transfer = raw RGB565 (big-endian) background + thumbnail; 38 = set layout.
+  async queryLayout() {
+    this.queue = [];
+    await this.send(0x39);
+    const end = Date.now() + 3000;
+    while (Date.now() < end) {
+      const p = await this.next(end - Date.now()).catch(() => null);
+      if (p && p.length > 9 && p[4] === 0x39) {
+        const b = p.subarray(5);
+        const info = {pos: b[0], top: b[1], bottom: b[2], colour: b[3] << 8 | b[4],
+          md5: new TextDecoder().decode(b.subarray(5, 37)).replace(/\0+$/, '')};
+        if (b.length >= 46) Object.assign(info, {w: b[37] << 8 | b[38], thumbW: b[39] << 8 | b[40], compression: b[45]});
+        return info;
+      }
+    }
+    return null;
+  }
+
+  async setLayout(info, md5) {
+    const tag = new TextEncoder().encode(md5.padEnd(32, '\0').slice(0, 32));
+    await this.send(0x38, [info.pos, info.top, info.bottom, info.colour >> 8, info.colour & 255, ...tag]);
+  }
+
+  /** Send a background file (built by rgb565Background) over 0x6E. Returns true when the CRC matched. */
+  async uploadBackground(data, onProgress = () => {}) {
+    const expected = crc16(data), size = data.length;
+    this.queue = [];
+    await this.send(0x6E, [size >>> 24, (size >> 16) & 255, (size >> 8) & 255, size & 255]);
+    let packet = 244;
+    for (;;) {
+      const p = await this.next();
+      if (p[0] !== 0xFE || p[1] !== 0xEA || p.length < 5) continue;
+      const op = p[4], body = p.subarray(5);
+      if (op === 0xBA && body[0] === 0x01 && body.length >= 3) {
+        packet = body[1] | body[2] << 8;
+      } else if (op === 0x6E && body.length >= 4 && body[0] === 0xFF && body[1] === 0xFF) {
+        const ok = (body[2] << 8 | body[3]) === expected;
+        await this.send(0x6E, ok ? [0, 0, 0, 0] : [255, 255, 255, 255]);
+        this.log(ok ? 'Background received' : 'Background CRC mismatch');
+        return ok;
+      } else if (op === 0x6E && body.length >= 2) {
+        const n = body[0] << 8 | body[1];
+        await this.writeFile(data.subarray(n * packet, (n + 1) * packet));
+        onProgress(Math.min(100, Math.round((n + 1) * packet * 100 / size)));
+      }
+    }
+  }
+
   /** Install a face into slot 8. onProgress(percent). Returns true when the watch shows it. */
   async upload(data, faceId, onProgress = () => {}) {
     if (!faceId) throw new Error('This face has no store face ID; the watch would reject it.');
@@ -145,4 +194,21 @@ export class C29 {
       }
     }
   }
+}
+
+/** Background file for the customisable face: canvas (w×w) + thumbnail, raw RGB565 big-endian. */
+export function rgb565Background(canvas, size = 360, thumb = 200) {
+  const parts = [size, thumb].map(n => {
+    const c = document.createElement('canvas'); c.width = c.height = n;
+    c.getContext('2d').drawImage(canvas, 0, 0, n, n);
+    const px = c.getContext('2d').getImageData(0, 0, n, n).data, out = new Uint8Array(n * n * 2);
+    for (let i = 0, o = 0; i < px.length; i += 4, o += 2) {
+      const v = (px[i] >> 3) << 11 | (px[i + 1] >> 2) << 5 | (px[i + 2] >> 3);
+      out[o] = v >> 8; out[o + 1] = v & 255;
+    }
+    return out;
+  });
+  const all = new Uint8Array(parts[0].length + parts[1].length);
+  all.set(parts[0]); all.set(parts[1], parts[0].length);
+  return all;
 }
