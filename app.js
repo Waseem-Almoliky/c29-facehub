@@ -444,7 +444,18 @@ function openFace(f) {
   };
 }
 
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator) {
+  // The app opens from the saved release; a new release downloads in the background.
+  // When it takes over, offer a reload (never mid-install).
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;
+    if (!busy && !document.querySelector('.sheet-bg') && performance.now() < 15000) return location.reload(); // just opened: switch quietly
+    toast(t('A new version is ready: tap here to reload'));
+    document.querySelector('.toast').onclick = () => location.reload();
+  });
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
 window.addEventListener('langchange', () => { if (!busy) closeSheet(); updateConn(); render(); });
 $('#lang').onclick = () => i18n.toggle();
 updateConn();

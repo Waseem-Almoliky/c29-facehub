@@ -37,6 +37,7 @@
     '{got} of {total} KB': '{got} من {total} ك.ب',
     'Download failed: {e}': 'فشل التنزيل: {e}',
     'Retry': 'إعادة المحاولة',
+    'A new version is ready: tap here to reload': 'نسخة جديدة جاهزة: اضغط هنا لإعادة التحميل',
     'Some previews will not load on this network. Fix: phone Settings → Private DNS → dns.google': 'بعض الصور لا تُحمَّل على هذه الشبكة. الحل: إعدادات الهاتف ← DNS الخاص ← dns.google',
     'Connecting to the store…': 'جارٍ الاتصال بالمتجر…',
     'Loading store…': 'جارٍ تحميل المتجر…',

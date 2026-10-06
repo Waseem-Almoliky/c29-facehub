@@ -1,10 +1,20 @@
-// Offline support: app shell cached on install; store previews/files cached as they're used.
-const SHELL = 'facehub-shell-v9', RUNTIME = 'facehub-runtime-v1';
+// Offline support and fast start.
+// App files: served from the cache of ONE release (instant start, never a mix of old and new files).
+// Releasing: change SHELL below. The phone then downloads the new release in the background and
+// the page offers to reload into it.
+const SHELL = 'facehub-shell-v10', RUNTIME = 'facehub-runtime-v1', DATA = 'facehub-data-v1';
 const FILES = ['./', 'index.html', 'app.js', 'face.js', 'c29ble.js', 'colorpick.js', 'i18n.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+// Served by PC FaceHub while developing: always take the newest files from disk.
+const DEV = ['localhost', '127.0.0.1'].includes(location.hostname);
 
-self.addEventListener('install', e => e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
+self.addEventListener('install', e => e.waitUntil(caches.open(SHELL)
+  .then(c => c.addAll(FILES.map(f => new Request(f, {cache: 'reload'})))) // straight from the server, not the HTTP cache
+  .then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(
-  caches.keys().then(ks => Promise.all(ks.filter(k => k !== SHELL && k !== RUNTIME).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+  caches.keys().then(ks => Promise.all(ks.filter(k => ![SHELL, RUNTIME, DATA].includes(k)).map(k => caches.delete(k))))
+    .then(() => self.clients.claim())));
+
+const fresh = req => fetch(req, {cache: 'no-cache'});
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
@@ -17,10 +27,20 @@ self.addEventListener('fetch', e => {
       fetch(url.href, {mode: 'cors', credentials: 'omit', signal: AbortSignal.timeout(10000)}) // a hung request blocks the queue; give up so the page retries
         .then(r => { if (r.ok) c.put(url.href, r.clone()); return r; })));
   } else if (url.origin === location.origin) {
-    // Our own files: network first so updates arrive, cache as offline fallback.
-    e.respondWith(fetch(e.request, {cache: 'no-cache'}).then(r => {
-      if (r.ok) caches.open(SHELL).then(c => c.put(e.request, r.clone()));
-      return r;
-    }).catch(() => caches.match(e.request)));
+    if (DEV) {
+      e.respondWith(fresh(e.request).catch(() => caches.match(e.request, {ignoreSearch: true})));
+    } else if (url.pathname.endsWith('/catalog.json')) {
+      // Store list: show the saved copy at once, refresh it in the background for next time.
+      e.respondWith(caches.open(DATA).then(async c => {
+        const update = fresh(e.request).then(r => { if (r.ok) c.put(e.request, r.clone()); return r; });
+        const saved = await c.match(e.request);
+        if (saved) { e.waitUntil(update.catch(() => {})); return saved; }
+        return update;
+      }));
+    } else {
+      // App files: this release's saved copy; the network only for anything not saved.
+      e.respondWith(caches.open(SHELL).then(async c =>
+        (await c.match(e.request, {ignoreSearch: true})) || fetch(e.request)));
+    }
   }
 });
