@@ -253,6 +253,7 @@ function openBackground() {
     <label class="btn ghost" style="text-align:center">Choose a photo…<input type="file" id="bgf" accept="image/*" hidden></label>
     <div class="box"><b>Time colour</b>
       <div class="sw" style="margin-top:10px">${SWATCHES.map(c => `<i data-c="${c}" style="background:${c}"></i>`).join('')}<input type="color" id="tc" value="${L.colour}"></div>
+      <button class="btn ghost" id="tpick">📷 Pick colour from a photo</button>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center">
         <span>Time at</span><select id="pos"><option value="0">top</option><option value="1" ${L.pos === 1 ? 'selected' : ''}>bottom</option></select>
         <span>Above</span><select id="top">${opts(L.top)}</select>
@@ -286,6 +287,9 @@ function openBackground() {
   s.querySelectorAll('select').forEach(x => x.onchange = draw);
   s.querySelectorAll('.sw i').forEach(i => i.onclick = () => { colour = i.dataset.c; s.querySelector('#tc').value = colour; draw(); });
   s.querySelector('#tc').oninput = e => { colour = e.target.value; draw(); };
+  s.querySelector('#tpick').onclick = async () => {
+    const c = await pickColour({title: 'Time colour from a photo'}); if (!c) return;
+    colour = c; s.querySelector('#tc').value = c.toLowerCase(); draw(); };
 
   const go = async withPhoto => {
     if (busy || !await ensureConnected()) return;
@@ -331,6 +335,7 @@ function openFace(f) {
     <button class="btn ghost" id="fav">${f.fav ? '★ Favourite' : '☆ Add to favourites'}</button>
     <div class="box"><b>Recolour</b><p class="hint" style="margin-top:6px">Shifts the face's accent colour and saves a copy.</p>
       <div class="sw">${SWATCHES.map(c => `<i data-c="${c}" style="background:${c}"></i>`).join('')}<input type="color" id="cc" value="${colour}"></div>
+      <button class="btn ghost" id="cpick">📷 Pick colour from a photo</button>
       <button class="btn ghost" id="rc" style="margin:0">Make recoloured copy</button></div>
     <div class="box"><b>Face ID</b><p class="hint" style="margin-top:6px">The store ID the watch is told after installing. Copies keep the original's ID.
       Without a valid ID the watch shows a dark screen and goes back to a built-in face.</p>
@@ -343,6 +348,10 @@ function openFace(f) {
     colour = i.dataset.c; s.querySelector('#cc').value = colour;
     s.querySelectorAll('.sw i').forEach(x => x.classList.toggle('on', x === i)); });
   s.querySelector('#cc').oninput = e => { colour = e.target.value; };
+  s.querySelector('#cpick').onclick = async () => {
+    const c = await pickColour({title: 'Recolour from a photo'}); if (!c) return;
+    colour = c; s.querySelector('#cc').value = c.toLowerCase();
+    s.querySelectorAll('.sw i').forEach(x => x.classList.remove('on')); toast(`Picked ${c}: tap “Make recoloured copy”`); };
   s.querySelector('#rc').onclick = async e => {
     e.target.disabled = true; e.target.textContent = 'Recolouring…';
     await new Promise(r => setTimeout(r, 30));
