@@ -380,17 +380,22 @@ function openBackground() {
   s.querySelector('#lay').onclick = () => go(false);
 }
 
+// Name without a trailing colour code ("Heat Racing #B3AE5E" -> "Heat Racing").
+const baseName = n => n.replace(/\s*#?[0-9A-F]{6}$/i, '');
+
 function openFace(f) {
-  let colour = '#B3AE5E';
+  let colour = f.colour || '#B3AE5E';
+  const own = !f.key.startsWith('store:'); // store downloads stay untouched; copies and imports can change
   const s = sheet(`<div class="big"><div class="dial" style="background-image:url('${previewUrl(f)}')"></div></div>
     <div class="pvbar" id="pv" hidden><span>${t('Preview')} <b dir="ltr"></b> · <small>${t('not saved yet')}</small></span><button class="chip" id="pvt">${t('Show original')}</button></div>
-    <div class="title">${esc(f.name)}</div><div class="meta">${f.key === pref('installed') ? t('On the watch (slot 8)') : t('{kb} KB', {kb: Math.round(f.data.byteLength / 1024)})}</div>
+    <div class="title" id="ttl"><span>${esc(f.name)}</span><button class="edit" id="ren" title="${t('Rename')}">✎</button></div><div class="meta">${f.key === pref('installed') ? t('On the watch (slot 8)') : t('{kb} KB', {kb: Math.round(f.data.byteLength / 1024)})}</div>
     <button class="btn primary" id="in">${t('Install on watch')}</button>
     <div id="job"></div>
     <button class="btn ghost" id="fav">${t(f.fav ? '★ Favourite' : '☆ Add to favourites')}</button>
-    <div class="box"><div class="pvhead"><b>${t('Recolour')}</b><div class="dial mini" id="pvmini" hidden></div></div><p class="hint" style="margin-top:6px">${t("Shifts the face's accent colour and saves a copy.")}</p>
+    <div class="box"><div class="pvhead"><b>${t('Recolour')}</b><div class="dial mini" id="pvmini" hidden></div></div><p class="hint" style="margin-top:6px">${t(own ? "Change this face's colour, or keep it and save a recoloured copy." : "Shifts the face's accent colour and saves a copy.")}</p>
       <div class="sw">${SWATCHES.map(c => `<i data-c="${c}" style="background:${c}"></i>`).join('')}<input type="color" id="cc" value="${colour}"></div>
       <button class="btn ghost" id="cpick">${t('📷 Pick colour from a photo')}</button>
+      ${own ? `<button class="btn primary" id="ap">${t("Change this face's colour")}</button>` : ''}
       <button class="btn ghost" id="rc" style="margin:0">${t('Make recoloured copy')}</button></div>
     <div class="box"><b>${t('Face ID')}</b><p class="hint" style="margin-top:6px">${t("The store ID the watch is told after installing. Copies keep the original's ID. Without a valid ID the watch shows a dark screen and goes back to a built-in face.")}</p>
       <input type="number" id="fid" value="${f.id || ''}" placeholder="${t('e.g. 26096')}"></div>
@@ -422,14 +427,46 @@ function openFace(f) {
     colour = c; s.querySelector('#cc').value = c.toLowerCase();
     s.querySelectorAll('.sw i').forEach(x => x.classList.remove('on')); preview();
     dial.scrollIntoView({behavior: 'smooth', block: 'center'}); };
+  // Recolour from the original store face when we know it, so repeated changes never lose quality.
+  const recolourFrom = async () => {
+    const src = f.src && await getFace(f.src);
+    return face.recolour(new Uint8Array((src || f).data), colour);
+  };
   s.querySelector('#rc').onclick = async e => {
     e.target.disabled = true; e.target.textContent = t('Recolouring…');
     await new Promise(r => setTimeout(r, 30));
     try {
-      const out = face.recolour(new Uint8Array(f.data), colour);
-      const copy = await addFace(out, `${f.name} ${colour.toUpperCase()}`, f.id);
+      const out = await recolourFrom();
+      const copy = await addFace(out, `${baseName(f.name)} ${colour.toUpperCase()}`, f.id);
+      copy.src = f.src || f.key; copy.colour = colour; await putFace(copy);
       render(); openFace(copy); toast(t('Saved a recoloured copy'));
     } catch (err) { toast(err.message, true); e.target.disabled = false; }
+  };
+  if (own) s.querySelector('#ap').onclick = async e => {
+    e.target.disabled = true; e.target.textContent = t('Recolouring…');
+    await new Promise(r => setTimeout(r, 30));
+    try {
+      const out = await recolourFrom();
+      f.data = out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength);
+      f.preview = await face.previewBlob(out); f.colour = colour;
+      if (/#?[0-9A-F]{6}$/i.test(f.name)) f.name = `${baseName(f.name)} ${colour.toUpperCase()}`;
+      await putFace(f);
+      URL.revokeObjectURL(urls.get(f.key)); urls.delete(f.key);
+      render(); openFace(f);
+      toast(t(f.key === pref('installed') ? 'Colour changed. Install again to update the watch.' : 'Colour changed'));
+    } catch (err) { toast(err.message, true); e.target.disabled = false; e.target.textContent = t("Change this face's colour"); }
+  };
+  s.querySelector('#ren').onclick = () => {
+    const ttl = s.querySelector('#ttl');
+    ttl.innerHTML = `<div class="renrow"><input id="nmi" maxlength="60"><button class="chip on" id="nms">${t('Save')}</button></div>`;
+    const inp = ttl.querySelector('#nmi'); inp.value = f.name; inp.focus(); inp.select();
+    const save = async () => {
+      const v = inp.value.trim();
+      if (v && v !== f.name) { f.name = v; await putFace(f); render(); toast(t('Renamed')); }
+      openFace(f);
+    };
+    ttl.querySelector('#nms').onclick = save;
+    inp.onkeydown = e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') openFace(f); };
   };
   s.querySelector('#fid').onchange = async e => { f.id = +e.target.value || null; await putFace(f); toast(t('Face ID saved')); };
   s.querySelector('#share').onclick = async () => {
@@ -443,6 +480,28 @@ function openFace(f) {
     await delFace(f.key); urls.delete(f.key); closeSheet(); render();
   };
 }
+
+// ---------- phone back button / gesture ----------
+// Keep one extra history entry while the app is open. A back press closes the top layer
+// (colour picker, then panel), then goes to the Watch tab; only then does it leave the app.
+let exitArmed = false;
+const guard = () => { if (history.state?.fh !== 'guard') history.pushState({fh: 'guard'}, ''); };
+history.replaceState({fh: 'base'}, '');
+guard();
+document.addEventListener('pointerdown', guard, true); // re-arm on any tap (also counts as user activation)
+window.addEventListener('popstate', () => {
+  const picker = document.querySelector('.cp-bg');
+  if (picker) picker._close?.();
+  else if (document.querySelector('.sheet-bg')) { if (!busy) closeSheet(); }
+  else if (tab !== 'watch') document.querySelector('nav [data-tab=watch]').click();
+  else if (!exitArmed) {
+    // Home screen: one more back leaves the app.
+    exitArmed = true; toast(t('Press back again to exit'));
+    setTimeout(() => { exitArmed = false; guard(); }, 2500);
+    return;
+  } else return;
+  guard();
+});
 
 if ('serviceWorker' in navigator) {
   // The app opens from the saved release; a new release downloads in the background.

@@ -92,6 +92,7 @@
     const touch = matchMedia('(pointer: coarse)').matches;
     const bg = el(`<div class="cp-bg"><div class="cp-in"></div></div>`), box = bg.firstChild;
     document.body.appendChild(bg);
+    bg._close = () => finish(null); // the host page's back button closes the picker
     let stream = null, done;
     const result = new Promise(r => done = r);
     const stopCam = () => { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; };

@@ -2,7 +2,7 @@
 // App files: served from the cache of ONE release (instant start, never a mix of old and new files).
 // Releasing: change SHELL below. The phone then downloads the new release in the background and
 // the page offers to reload into it.
-const SHELL = 'facehub-shell-v10', RUNTIME = 'facehub-runtime-v1', DATA = 'facehub-data-v1';
+const SHELL = 'facehub-shell-v11', RUNTIME = 'facehub-runtime-v1', DATA = 'facehub-data-v1';
 const FILES = ['./', 'index.html', 'app.js', 'face.js', 'c29ble.js', 'colorpick.js', 'i18n.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 // Served by PC FaceHub while developing: always take the newest files from disk.
 const DEV = ['localhost', '127.0.0.1'].includes(location.hostname);
