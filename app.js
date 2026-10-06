@@ -65,22 +65,22 @@ function card(img, name, sub, onclick, sel) {
 watch.onDisconnect = () => { updateConn(); if (tab === 'watch') render(); };
 function updateConn() {
   const b = $('#conn');
-  b.textContent = watch.connected ? '● ' + (watch.device.name || 'C29') : 'Connect watch';
+  b.textContent = watch.connected ? '● ' + (watch.device.name || 'C29') : t('Connect watch');
   b.classList.toggle('on', watch.connected);
 }
 async function ensureConnected() {
   if (watch.connected) return true;
   if (!supported()) {
-    toast(window.isSecureContext ? 'This browser has no Web Bluetooth. Use Chrome on Android.' : 'Bluetooth needs HTTPS or localhost.', true);
+    toast(t(window.isSecureContext ? 'This browser has no Web Bluetooth. Use Chrome on Android.' : 'Bluetooth needs HTTPS or localhost.'), true);
     return false;
   }
   try {
-    toast('Turn off Bluetooth in the Da Fit app (or the phone\'s pairing with Da Fit) if connecting fails.');
+    toast(t("Turn off Bluetooth in the Da Fit app (or the phone's pairing with Da Fit) if connecting fails."));
     await watch.connect(); updateConn();
     pref('current', await watch.currentFace());
     return true;
   } catch (e) {
-    if (e.name !== 'NotFoundError') toast('Could not connect: ' + e.message, true);
+    if (e.name !== 'NotFoundError') toast(t('Could not connect: {e}', {e: e.message}), true);
     return false;
   }
 }
@@ -91,21 +91,21 @@ $('#conn').onclick = async () => {
 
 async function install(f) {
   if (busy) return;
-  if (!f.id) { toast('Set the face\'s store ID first (see "Face ID" below).', true); return; }
+  if (!f.id) { toast(t('Set the face\'s store ID first (see "Face ID" below).'), true); return; }
   if (!await ensureConnected()) return;
   busy = true;
   const box = [...document.querySelectorAll('#job')].pop(); // the open sheet's, if any
   const lines = [];
   watch.log = m => { lines.push(m); draw(); };
   let pct = 0;
-  const draw = () => box && (box.innerHTML = `<div class="box"><b>Installing… ${pct}%</b><div class="bar"><i style="width:${pct}%"></i></div><pre>${esc(lines.slice(-5).join('\n'))}</pre></div>`);
+  const draw = () => box && (box.innerHTML = `<div class="box"><b>${t('Installing… {p}%', {p: pct})}</b><div class="bar"><i style="width:${pct}%"></i></div><pre>${esc(lines.slice(-5).join('\n'))}</pre></div>`);
   draw();
   try {
     const ok = await watch.upload(new Uint8Array(f.data), f.id, p => { pct = p; draw(); });
-    if (ok) { pref('installed', f.key); pref('current', 8); toast('Face installed ✓'); }
-    else toast('The watch did not accept the face. Try again.', true);
+    if (ok) { pref('installed', f.key); pref('current', 8); toast(t('Face installed ✓')); }
+    else toast(t('The watch did not accept the face. Try again.'), true);
   } catch (e) {
-    toast('Install failed: ' + e.message, true);
+    toast(t('Install failed: {e}', {e: e.message}), true);
   } finally {
     busy = false; watch.log = () => {};
     if (box) box.innerHTML = '';
@@ -131,23 +131,23 @@ async function renderWatch(m) {
   const inst = faces.find(f => f.key === pref('installed'));
   const cur = pref('current');
   m.innerHTML = `
-    ${supported() ? '' : `<div class="box warn"><p class="hint" style="margin:0">${window.isSecureContext
+    ${supported() ? '' : `<div class="box warn"><p class="hint" style="margin:0">${t(window.isSecureContext
       ? 'This browser has no Web Bluetooth. Open FaceHub in <b>Chrome on Android</b>.'
-      : 'Web Bluetooth needs a secure page (HTTPS or localhost).'}</p></div>`}
-    <h2>On the watch</h2>
-    <p class="hint">Faces 1–7 are built in. Slot 8 holds one custom face; installing replaces it (about 20 s).
-      ${watch.connected ? 'Tap a slot to show it.' : 'Connect to switch faces.'}</p>
+      : 'Web Bluetooth needs a secure page (HTTPS or localhost).')}</p></div>`}
+    <h2>${t('On the watch')}</h2>
+    <p class="hint">${t('Faces 1–7 are built in. Slot 8 holds one custom face; installing replaces it (about 20 s).')}
+      ${t(watch.connected ? 'Tap a slot to show it.' : 'Connect to switch faces.')}</p>
     <div class="grid" id="slots"></div>
     <div id="job" style="margin-top:14px"></div>
-    <button class="btn ghost" id="bg" style="margin-top:14px">🖼 Put your photo on face 2</button>
-    <h2>Quick install</h2><div class="grid" id="quick"></div>`;
+    <button class="btn ghost" id="bg" style="margin-top:14px">${t('🖼 Put your photo on face 2')}</button>
+    <h2>${t('Quick install')}</h2><div class="grid" id="quick"></div>`;
   const slots = $('#slots');
   for (let n = 1; n <= 8; n++) {
     const img = n === 8 && inst ? previewUrl(inst) : n === 2 ? pref('bgThumb') || '' : '';
-    const el = card(img, n === 8 ? (inst ? inst.name : 'Custom') : n === 2 ? 'Your photo' : 'Built-in ' + n, cur === n ? 'showing' : '', async () => {
+    const el = card(img, n === 8 ? (inst ? inst.name : t('Custom')) : n === 2 ? t('Your photo') : t('Built-in {n}', {n}), cur === n ? t('showing') : '', async () => {
       if (busy || !await ensureConnected()) return;
       busy = true;
-      try { const now = await watch.showFace(n); pref('current', now); if (now !== n) toast(`Watch stayed on face ${now}`, true); }
+      try { const now = await watch.showFace(n); pref('current', now); if (now !== n) toast(t('Watch stayed on face {n}', {n: now}), true); }
       catch (e) { toast(e.message, true); }
       busy = false; render();
     }, cur === n);
@@ -157,20 +157,20 @@ async function renderWatch(m) {
   $('#bg').onclick = openBackground;
   const quick = $('#quick');
   const list = faces.filter(f => f.fav).concat(faces.filter(f => !f.fav)).slice(0, 9);
-  if (!list.length) quick.outerHTML = '<div class="empty">No faces yet.<br>Get some from the Store, or import .bin files in My faces.</div>';
-  list.forEach(f => quick.appendChild(card(previewUrl(f), f.name, (f.fav ? '★ ' : '') + (f.key === pref('installed') ? 'in slot 8' : ''), () => openFace(f))));
+  if (!list.length) quick.outerHTML = `<div class="empty">${t('No faces yet.<br>Get some from the Store, or import .bin files in My faces.')}</div>`;
+  list.forEach(f => quick.appendChild(card(previewUrl(f), f.name, (f.fav ? '★ ' : '') + (f.key === pref('installed') ? t('in slot 8') : ''), () => openFace(f))));
 }
 
 async function renderLibrary(m) {
   const faces = await allFaces();
-  m.innerHTML = `<div class="chips"><button class="chip" id="imp">＋ Import .bin</button>${location.protocol.startsWith('http') && await hasPc() ? '<button class="chip" id="pc">⇣ From PC FaceHub</button>' : ''}</div>
+  m.innerHTML = `<div class="chips"><button class="chip" id="imp">${t('＋ Import .bin')}</button>${location.protocol.startsWith('http') && await hasPc() ? `<button class="chip" id="pc">${t('⇣ From PC FaceHub')}</button>` : ''}</div>
     <div class="grid" id="g"></div>`;
   $('#imp').onclick = () => $('#file').click();
   if ($('#pc')) $('#pc').onclick = importFromPc;
   const g = $('#g');
-  if (!faces.length) g.outerHTML = '<div class="empty">Your faces live here, stored on this phone.</div>';
+  if (!faces.length) g.outerHTML = `<div class="empty">${t('Your faces live here, stored on this phone.')}</div>`;
   faces.sort((a, b) => (b.fav | 0) - (a.fav | 0)).forEach(f =>
-    g.appendChild(card(previewUrl(f), f.name, (f.fav ? '★ ' : '') + (f.key === pref('installed') ? 'on watch' : Math.round(f.data.byteLength / 1024) + ' KB'), () => openFace(f))));
+    g.appendChild(card(previewUrl(f), f.name, (f.fav ? '★ ' : '') + (f.key === pref('installed') ? t('on watch') : t('{kb} KB', {kb: Math.round(f.data.byteLength / 1024)})), () => openFace(f))));
 }
 
 $('#file').onchange = async e => {
@@ -183,7 +183,7 @@ $('#file').onchange = async e => {
     } catch (err) { toast(err.message, true); }
   }
   e.target.value = '';
-  if (n) { toast(`Imported ${n} face${n > 1 ? 's' : ''}`); render(); }
+  if (n) { toast(t('Imported {n} face{s}', {n, s: n > 1 ? 's' : ''})); render(); }
 };
 
 // When this page is served by FaceHub on the PC, it can pull faces (with their IDs) from it.
@@ -199,24 +199,24 @@ async function importFromPc() {
     const r = await fetch(`../api/file/${i.lib}/${encodeURIComponent(i.file)}`);
     if (r.ok) { await addFace(await r.arrayBuffer(), i.name, i.id, key); n++; }
   }
-  toast(n ? `Copied ${n} face${n > 1 ? 's' : ''} from the PC` : 'Nothing new on the PC');
+  toast(n ? t('Copied {n} face{s} from the PC', {n, s: n > 1 ? 's' : ''}) : t('Nothing new on the PC'));
   render();
 }
 
 async function renderStore(m) {
   if (!catalog) {
-    m.innerHTML = '<div class="empty">Loading store…</div>';
+    m.innerHTML = `<div class="empty">${t('Loading store…')}</div>`;
     try { catalog = await (await fetch('catalog.json')).json(); }
-    catch { m.innerHTML = '<div class="empty">Store catalog unavailable offline.</div>'; return; }
+    catch { m.innerHTML = `<div class="empty">${t('Store catalog unavailable offline.')}</div>`; return; }
   }
   const have = new Set((await allFaces()).map(f => f.key));
   const list = catalog.faces.filter(f => f.tags.includes(storeTag));
-  m.innerHTML = `<div class="chips">${catalog.tags.map(t => `<button class="chip ${t.id === storeTag ? 'on' : ''}" data-t="${t.id}">${t.name}</button>`).join('')}</div>
-    <div class="grid" id="g"></div>${list.length > storeShown ? '<button class="btn ghost" id="more" style="margin-top:18px">Show more</button>' : ''}`;
+  m.innerHTML = `<div class="chips">${catalog.tags.map(g => `<button class="chip ${g.id === storeTag ? 'on' : ''}" data-t="${g.id}">${t(g.name)}</button>`).join('')}</div>
+    <div class="grid" id="g"></div>${list.length > storeShown ? `<button class="btn ghost" id="more" style="margin-top:18px">${t('Show more')}</button>` : ''}`;
   m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { storeTag = +b.dataset.t; storeShown = 36; render(); });
   if ($('#more')) $('#more').onclick = () => { storeShown += 36; render(); };
   const g = $('#g');
-  list.slice(0, storeShown).forEach(f => g.appendChild(card(f.preview, f.name, have.has('store:' + f.id) ? '✓ saved' : '', () => openStore(f))));
+  list.slice(0, storeShown).forEach(f => g.appendChild(card(f.preview, f.name, have.has('store:' + f.id) ? t('✓ saved') : '', () => openStore(f))));
 }
 
 async function downloadStore(f) {
@@ -227,40 +227,40 @@ async function downloadStore(f) {
 
 function openStore(f) {
   const s = sheet(`<div class="big"><div class="dial" style="background-image:url('${f.preview}')"></div></div>
-    <div class="title">${esc(f.name)}</div><div class="meta">Store face #${f.id} · ${Math.round(f.size / 1024)} KB</div>
-    <button class="btn primary" id="di">Download &amp; install</button>
-    <button class="btn ghost" id="d">Save to My faces</button><div id="job"></div>`);
+    <div class="title">${esc(f.name)}</div><div class="meta">${t('Store face #{id}', {id: f.id})} · ${t('{kb} KB', {kb: Math.round(f.size / 1024)})}</div>
+    <button class="btn primary" id="di">${t('Download &amp; install')}</button>
+    <button class="btn ghost" id="d">${t('Save to My faces')}</button><div id="job"></div>`);
   const get = async () => (await getFace('store:' + f.id)) || downloadStore(f);
   s.querySelector('#d').onclick = async e => {
-    e.target.disabled = true; e.target.textContent = 'Downloading…';
+    e.target.disabled = true; e.target.textContent = t('Downloading…');
     try { const x = await get(); closeSheet(); openFace(x); } catch (err) { toast(err.message, true); e.target.disabled = false; }
   };
   s.querySelector('#di').onclick = async e => {
-    e.target.disabled = true; e.target.textContent = 'Downloading…';
+    e.target.disabled = true; e.target.textContent = t('Downloading…');
     try { await install(await get()); closeSheet(); } catch (err) { toast(err.message, true); }
-    e.target.disabled = false; e.target.textContent = 'Download & install';
+    e.target.disabled = false; e.target.innerHTML = t('Download &amp; install');
   };
 }
 
 // Built-in face 2 is customisable: background photo, time colour/position, two info lines.
 function openBackground() {
   const INFO = ['none', 'date', 'sleep', 'heart rate', 'steps'];
-  const opts = sel => INFO.map((t, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${t}</option>`).join('');
+  const opts = sel => INFO.map((x, i) => `<option value="${i}" ${i === sel ? 'selected' : ''}>${t(x)}</option>`).join('');
   const L = pref('bgLayout') || {pos: 0, top: 1, bottom: 4, colour: '#FFFFFF'};
-  const s = sheet(`<div class="title">Face 2: your photo</div>
-    <div class="meta">Background, time colour and info lines for built-in face 2</div>
+  const s = sheet(`<div class="title">${t('Face 2: your photo')}</div>
+    <div class="meta">${t('Background, time colour and info lines for built-in face 2')}</div>
     <div class="big"><canvas id="bgc" width="360" height="360" class="dial" style="display:block"></canvas></div>
-    <label class="btn ghost" style="text-align:center">Choose a photo…<input type="file" id="bgf" accept="image/*" hidden></label>
-    <div class="box"><b>Time colour</b>
+    <label class="btn ghost" style="text-align:center">${t('Choose a photo…')}<input type="file" id="bgf" accept="image/*" hidden></label>
+    <div class="box"><b>${t('Time colour')}</b>
       <div class="sw" style="margin-top:10px">${SWATCHES.map(c => `<i data-c="${c}" style="background:${c}"></i>`).join('')}<input type="color" id="tc" value="${L.colour}"></div>
-      <button class="btn ghost" id="tpick">📷 Pick colour from a photo</button>
+      <button class="btn ghost" id="tpick">${t('📷 Pick colour from a photo')}</button>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center">
-        <span>Time at</span><select id="pos"><option value="0">top</option><option value="1" ${L.pos === 1 ? 'selected' : ''}>bottom</option></select>
-        <span>Above</span><select id="top">${opts(L.top)}</select>
-        <span>Below</span><select id="bot">${opts(L.bottom)}</select></div></div>
+        <span>${t('Time at')}</span><select id="pos"><option value="0">${t('top')}</option><option value="1" ${L.pos === 1 ? 'selected' : ''}>${t('bottom')}</option></select>
+        <span>${t('Above')}</span><select id="top">${opts(L.top)}</select>
+        <span>${t('Below')}</span><select id="bot">${opts(L.bottom)}</select></div></div>
     <div id="job"></div>
-    <button class="btn primary" id="send" disabled>Send photo + layout</button>
-    <button class="btn ghost" id="lay">Update layout only</button>`);
+    <button class="btn primary" id="send" disabled>${t('Send photo + layout')}</button>
+    <button class="btn ghost" id="lay">${t('Update layout only')}</button>`);
   s.querySelectorAll('select').forEach(x => Object.assign(x.style, {background: 'var(--bg)', color: 'var(--ink)', border: '1px solid var(--line)', borderRadius: '8px', padding: '8px', font: 'inherit'}));
   const cv = s.querySelector('#bgc'), ctx = cv.getContext('2d');
   const photo = document.createElement('canvas'); photo.width = photo.height = 360;
@@ -288,7 +288,7 @@ function openBackground() {
   s.querySelectorAll('.sw i').forEach(i => i.onclick = () => { colour = i.dataset.c; s.querySelector('#tc').value = colour; draw(); });
   s.querySelector('#tc').oninput = e => { colour = e.target.value; draw(); };
   s.querySelector('#tpick').onclick = async () => {
-    const c = await pickColour({title: 'Time colour from a photo'}); if (!c) return;
+    const c = await pickColour({title: t('Time colour from a photo')}); if (!c) return;
     colour = c; s.querySelector('#tc').value = c.toLowerCase(); draw(); };
 
   const go = async withPhoto => {
@@ -297,27 +297,27 @@ function openBackground() {
     const box = s.querySelector('#job');
     let pct = 0;
     const show = msg => { box.innerHTML = `<div class="box"><b>${msg}</b>${withPhoto ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ''}</div>`; };
-    show('Connecting…');
+    show(t('Connecting…'));
     try {
       const info = await watch.queryLayout();
-      if (!info) throw new Error('the watch did not report a customisable face');
+      if (!info) throw new Error(t('the watch did not report a customisable face'));
       let tag = info.md5;
       if (withPhoto) {
         const data = rgb565Background(photo, info.w || 360, info.thumbW || 200);
         tag = [...new Uint8Array(await crypto.subtle.digest('SHA-256', data))].slice(0, 16).map(b => b.toString(16).padStart(2, '0')).join('');
-        if (!await watch.uploadBackground(data, p => { pct = p; show(`Sending photo… ${p}%`); })) throw new Error('the watch rejected the photo (checksum)');
-        const t = document.createElement('canvas'); t.width = t.height = 120;
-        t.getContext('2d').drawImage(photo, 0, 0, 120, 120);
-        pref('bgThumb', t.toDataURL('image/jpeg', 0.8));
+        if (!await watch.uploadBackground(data, p => { pct = p; show(t('Sending photo… {p}%', {p})); })) throw new Error(t('the watch rejected the photo (checksum)'));
+        const th = document.createElement('canvas'); th.width = th.height = 120;
+        th.getContext('2d').drawImage(photo, 0, 0, 120, 120);
+        pref('bgThumb', th.toDataURL('image/jpeg', 0.8));
       }
       const l = layout(), [r, g, b] = face.hexRgb(colour);
       await watch.setLayout({...l, colour: (r >> 3) << 11 | (g >> 2) << 5 | (b >> 3)}, tag);
       pref('bgLayout', l);
       const now = await watch.showFace(2); pref('current', now);
-      toast(withPhoto ? 'Photo face updated ✓' : 'Layout updated ✓');
+      toast(t(withPhoto ? 'Photo face updated ✓' : 'Layout updated ✓'));
       closeSheet();
     } catch (e) {
-      toast('Failed: ' + e.message, true); box.innerHTML = '';
+      toast(t('Failed: {e}', {e: e.message}), true); box.innerHTML = '';
     } finally {
       busy = false; if (tab === 'watch') render();
     }
@@ -329,19 +329,18 @@ function openBackground() {
 function openFace(f) {
   let colour = '#B3AE5E';
   const s = sheet(`<div class="big"><div class="dial" style="background-image:url('${previewUrl(f)}')"></div></div>
-    <div class="title">${esc(f.name)}</div><div class="meta">${f.key === pref('installed') ? 'On the watch (slot 8)' : Math.round(f.data.byteLength / 1024) + ' KB'}</div>
-    <button class="btn primary" id="in">Install on watch</button>
+    <div class="title">${esc(f.name)}</div><div class="meta">${f.key === pref('installed') ? t('On the watch (slot 8)') : t('{kb} KB', {kb: Math.round(f.data.byteLength / 1024)})}</div>
+    <button class="btn primary" id="in">${t('Install on watch')}</button>
     <div id="job"></div>
-    <button class="btn ghost" id="fav">${f.fav ? '★ Favourite' : '☆ Add to favourites'}</button>
-    <div class="box"><b>Recolour</b><p class="hint" style="margin-top:6px">Shifts the face's accent colour and saves a copy.</p>
+    <button class="btn ghost" id="fav">${t(f.fav ? '★ Favourite' : '☆ Add to favourites')}</button>
+    <div class="box"><b>${t('Recolour')}</b><p class="hint" style="margin-top:6px">${t("Shifts the face's accent colour and saves a copy.")}</p>
       <div class="sw">${SWATCHES.map(c => `<i data-c="${c}" style="background:${c}"></i>`).join('')}<input type="color" id="cc" value="${colour}"></div>
-      <button class="btn ghost" id="cpick">📷 Pick colour from a photo</button>
-      <button class="btn ghost" id="rc" style="margin:0">Make recoloured copy</button></div>
-    <div class="box"><b>Face ID</b><p class="hint" style="margin-top:6px">The store ID the watch is told after installing. Copies keep the original's ID.
-      Without a valid ID the watch shows a dark screen and goes back to a built-in face.</p>
-      <input type="number" id="fid" value="${f.id || ''}" placeholder="e.g. 26096"></div>
-    <button class="btn ghost" id="share">Share .bin file</button>
-    <button class="btn danger" id="del">Delete</button>`);
+      <button class="btn ghost" id="cpick">${t('📷 Pick colour from a photo')}</button>
+      <button class="btn ghost" id="rc" style="margin:0">${t('Make recoloured copy')}</button></div>
+    <div class="box"><b>${t('Face ID')}</b><p class="hint" style="margin-top:6px">${t("The store ID the watch is told after installing. Copies keep the original's ID. Without a valid ID the watch shows a dark screen and goes back to a built-in face.")}</p>
+      <input type="number" id="fid" value="${f.id || ''}" placeholder="${t('e.g. 26096')}"></div>
+    <button class="btn ghost" id="share">${t('Share .bin file')}</button>
+    <button class="btn danger" id="del">${t('Delete')}</button>`);
   s.querySelector('#in').onclick = async e => { e.target.disabled = true; await install(f); e.target.disabled = false; };
   s.querySelector('#fav').onclick = async () => { f.fav = !f.fav; await putFace(f); openFace(f); render(); };
   s.querySelectorAll('.sw i').forEach(i => i.onclick = () => {
@@ -349,19 +348,19 @@ function openFace(f) {
     s.querySelectorAll('.sw i').forEach(x => x.classList.toggle('on', x === i)); });
   s.querySelector('#cc').oninput = e => { colour = e.target.value; };
   s.querySelector('#cpick').onclick = async () => {
-    const c = await pickColour({title: 'Recolour from a photo'}); if (!c) return;
+    const c = await pickColour({title: t('Recolour from a photo')}); if (!c) return;
     colour = c; s.querySelector('#cc').value = c.toLowerCase();
-    s.querySelectorAll('.sw i').forEach(x => x.classList.remove('on')); toast(`Picked ${c}: tap “Make recoloured copy”`); };
+    s.querySelectorAll('.sw i').forEach(x => x.classList.remove('on')); toast(t('Picked {c}: tap “Make recoloured copy”', {c})); };
   s.querySelector('#rc').onclick = async e => {
-    e.target.disabled = true; e.target.textContent = 'Recolouring…';
+    e.target.disabled = true; e.target.textContent = t('Recolouring…');
     await new Promise(r => setTimeout(r, 30));
     try {
       const out = face.recolour(new Uint8Array(f.data), colour);
       const copy = await addFace(out, `${f.name} ${colour.toUpperCase()}`, f.id);
-      render(); openFace(copy); toast('Saved a recoloured copy');
+      render(); openFace(copy); toast(t('Saved a recoloured copy'));
     } catch (err) { toast(err.message, true); e.target.disabled = false; }
   };
-  s.querySelector('#fid').onchange = async e => { f.id = +e.target.value || null; await putFace(f); toast('Face ID saved'); };
+  s.querySelector('#fid').onchange = async e => { f.id = +e.target.value || null; await putFace(f); toast(t('Face ID saved')); };
   s.querySelector('#share').onclick = async () => {
     const file = new File([f.data], f.name.replace(/[^\w-]+/g, '_') + '.bin', {type: 'application/octet-stream'});
     if (navigator.canShare?.({files: [file]})) navigator.share({files: [file], title: f.name}).catch(() => {});
@@ -369,11 +368,13 @@ function openFace(f) {
   };
   const del = s.querySelector('#del');
   del.onclick = async () => {
-    if (!del.dataset.armed) { del.dataset.armed = 1; del.textContent = 'Tap again to delete'; return; }
+    if (!del.dataset.armed) { del.dataset.armed = 1; del.textContent = t('Tap again to delete'); return; }
     await delFace(f.key); urls.delete(f.key); closeSheet(); render();
   };
 }
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+window.addEventListener('langchange', () => { if (!busy) closeSheet(); updateConn(); render(); });
+$('#lang').onclick = () => i18n.toggle();
 updateConn();
 render();

@@ -1,6 +1,6 @@
 // Offline support: app shell cached on install; store previews/files cached as they're used.
-const SHELL = 'facehub-shell-v3', RUNTIME = 'facehub-runtime-v1';
-const FILES = ['./', 'index.html', 'app.js', 'face.js', 'c29ble.js', 'colorpick.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+const SHELL = 'facehub-shell-v4', RUNTIME = 'facehub-runtime-v1';
+const FILES = ['./', 'index.html', 'app.js', 'face.js', 'c29ble.js', 'colorpick.js', 'i18n.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(

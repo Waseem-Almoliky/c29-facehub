@@ -12,18 +12,19 @@
 .cp-btn{display:block;width:100%;padding:13px;border-radius:12px;border:1px solid #2b3036;background:#181b1f;color:#ecebe4;font:inherit;font-weight:600;cursor:pointer;text-align:center}
 .cp-btn.pri{background:#B3AE5E;border-color:#B3AE5E;color:#1a1a10}
 .cp-row{display:flex;gap:10px}.cp-row>*{flex:1}
-.cp-stage{position:relative;flex:1;min-height:180px;display:grid;place-items:center;overflow:hidden;border-radius:14px;background:#000}
+.cp-stage{direction:ltr;position:relative;flex:1;min-height:180px;display:grid;place-items:center;overflow:hidden;border-radius:14px;background:#000}
 .cp-stage canvas,.cp-stage video{max-width:100%;max-height:100%;display:block;touch-action:none;cursor:crosshair}
 .cp-drop{flex:1;border:2px dashed #2b3036;border-radius:14px;display:grid;place-items:center;text-align:center;color:#8d928f;padding:20px;min-height:160px}
 .cp-drop.on{border-color:#B3AE5E;color:#ecebe4}
 .cp-pal{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.cp-pal span{font-size:12px;color:#8d928f;margin-right:2px}
+.cp-pal span{font-size:12px;color:#8d928f;margin-inline-end:2px}
 .cp-pal i{width:30px;height:30px;border-radius:50%;border:2px solid #0b0c0e;box-shadow:0 0 0 1px #3a3f45;cursor:pointer;display:block}
 .cp-res{display:grid;grid-template-columns:auto auto 1fr;gap:6px 12px;align-items:center;background:#15181b;border:1px solid #272b30;border-radius:14px;padding:12px}
 .cp-dot{width:44px;height:44px;border-radius:50%;box-shadow:0 0 0 1px #3a3f45}
 .cp-res small{display:block;color:#8d928f;font-size:11px}.cp-res code{font-size:14px}
 .cp-res input{width:100%;accent-color:#B3AE5E}
 `;
+  const t = (k, v) => window.t ? window.t(k, v) : k.replace(/\{(\w+)\}/g, (m, x) => v && x in v ? v[x] : m);
   let styled = false;
   const el = (html) => { const t = document.createElement('div'); t.innerHTML = html.trim(); return t.firstChild; };
   const hex = ([r, g, b]) => '#' + [r, g, b].map(v => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('').toUpperCase();
@@ -81,7 +82,7 @@
     return new Promise((res, rej) => {
       const im = new Image(), u = URL.createObjectURL(file);
       im.onload = () => { URL.revokeObjectURL(u); res(im); };
-      im.onerror = () => { URL.revokeObjectURL(u); rej(new Error('That file is not a picture the browser can open')); };
+      im.onerror = () => { URL.revokeObjectURL(u); rej(new Error(t('That file is not a picture the browser can open'))); };
       im.src = u;
     });
   }
@@ -97,17 +98,17 @@
     const finish = v => { stopCam(); window.removeEventListener('keydown', onKey); bg.remove(); done(v); };
     const onKey = e => { if (e.key === 'Escape') finish(null); };
     window.addEventListener('keydown', onKey);
-    const top = t => `<div class="cp-top"><b>${t}</b><button class="cp-x" data-x>Cancel</button></div>`;
+    const top = title => `<div class="cp-top"><b>${title}</b><button class="cp-x" data-x>${t('Cancel')}</button></div>`;
     const wire = () => box.querySelector('[data-x]').onclick = () => finish(null);
 
     function chooseSource(msg) {
       stopCam();
-      box.innerHTML = top(opts.title || 'Colour from a photo') + `
-        <p class="cp-hint">${msg || 'Take a photo of your T-shirt (or anything) and tap the spot whose colour you want. Daylight gives the truest colour.'}</p>
-        <div class="cp-drop">${touch ? '📷' : 'Drop a picture here, or paste one (Ctrl+V)'}</div>
+      box.innerHTML = top(opts.title || t('Colour from a photo')) + `
+        <p class="cp-hint">${msg || t('Take a photo of your T-shirt (or anything) and tap the spot whose colour you want. Daylight gives the truest colour.')}</p>
+        <div class="cp-drop">${touch ? '📷' : t('Drop a picture here, or paste one (Ctrl+V)')}</div>
         <div class="cp-row">
-          <button class="cp-btn pri" data-cam>Take photo</button>
-          <label class="cp-btn">Choose photo<input type="file" accept="image/*" hidden data-file></label></div>
+          <button class="cp-btn pri" data-cam>${t('Take photo')}</button>
+          <label class="cp-btn">${t('Choose photo')}<input type="file" accept="image/*" hidden data-file></label></div>
         <input type="file" accept="image/*" capture="environment" hidden data-snap>`;
       wire();
       const fromFile = async f => { if (!f) return; try { pick(await loadImage(f)); } catch (e) { chooseSource(e.message); } };
@@ -123,8 +124,8 @@
     }
 
     async function webcam() {
-      box.innerHTML = top('Camera') + `<div class="cp-stage"><video autoplay playsinline muted></video></div>
-        <div class="cp-row"><button class="cp-btn" data-back>Back</button><button class="cp-btn pri" data-shot>Take photo</button></div>`;
+      box.innerHTML = top(t('Camera')) + `<div class="cp-stage"><video autoplay playsinline muted></video></div>
+        <div class="cp-row"><button class="cp-btn" data-back>${t('Back')}</button><button class="cp-btn pri" data-shot>${t('Take photo')}</button></div>`;
       wire();
       box.querySelector('[data-back]').onclick = () => chooseSource();
       const v = box.querySelector('video');
@@ -132,7 +133,7 @@
         stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment', width: {ideal: 1920}}});
         v.srcObject = stream;
       } catch (e) {
-        return chooseSource(`Could not open the camera (${e.name === 'NotAllowedError' ? 'permission denied' : 'no camera found'}). Choose a photo instead.`);
+        return chooseSource(t('Could not open the camera ({why}). Choose a photo instead.', {why: t(e.name === 'NotAllowedError' ? 'permission denied' : 'no camera found')}));
       }
       box.querySelector('[data-shot]').onclick = () => {
         if (!v.videoWidth) return;
@@ -152,15 +153,15 @@
       ictx.drawImage(src, 0, 0, img.width, img.height);
       const pal = palette(img);
 
-      box.innerHTML = top('Tap the colour you want') + `
+      box.innerHTML = top(t('Tap the colour you want')) + `
         <div class="cp-stage"><canvas></canvas></div>
-        <div class="cp-pal"><span>Main colours</span>${pal.map((p, i) => `<i data-p="${i}" style="background:${hex(p)}" title="${hex(p)}"></i>`).join('')}</div>
+        <div class="cp-pal"><span>${t('Main colours')}</span>${pal.map((p, i) => `<i data-p="${i}" style="background:${hex(p)}" title="${hex(p)}"></i>`).join('')}</div>
         <div class="cp-res">
-          <div class="cp-dot" data-raw></div><div><small>In the photo</small><code data-rawt></code></div>
-          <div style="display:flex;align-items:center;gap:12px"><div class="cp-dot" data-out></div><div><small>On the watch</small><code data-outt></code></div></div>
-          <div style="grid-column:1/-1"><small>Watch boost: brighter and richer, so it reads like the real thing on the watch screen</small>
+          <div class="cp-dot" data-raw></div><div><small>${t('In the photo')}</small><code data-rawt></code></div>
+          <div style="display:flex;align-items:center;gap:12px"><div class="cp-dot" data-out></div><div><small>${t('On the watch')}</small><code data-outt></code></div></div>
+          <div style="grid-column:1/-1"><small>${t('Watch boost: brighter and richer, so it reads like the real thing on the watch screen')}</small>
             <input type="range" min="0" max="100" value="${opts.boost ?? 40}" data-boost></div></div>
-        <div class="cp-row"><button class="cp-btn" data-again>Another photo</button><button class="cp-btn pri" data-use>Use this colour</button></div>`;
+        <div class="cp-row"><button class="cp-btn" data-again>${t('Another photo')}</button><button class="cp-btn pri" data-use>${t('Use this colour')}</button></div>`;
       wire();
       const cv = box.querySelector('canvas'), ctx = cv.getContext('2d');
       cv.width = img.width; cv.height = img.height;
