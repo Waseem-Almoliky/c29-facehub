@@ -219,27 +219,50 @@ async function renderStore(m) {
   list.slice(0, storeShown).forEach(f => g.appendChild(card(f.preview, f.name, have.has('store:' + f.id) ? t('✓ saved') : '', () => openStore(f))));
 }
 
-async function downloadStore(f) {
+// Streams the file so the progress bar shows real bytes received (size from the CDN, else the catalog).
+async function downloadStore(f, onProgress = () => {}) {
   const r = await fetch(f.file);
   if (!r.ok) throw new Error('download failed (' + r.status + ')');
-  return addFace(await r.arrayBuffer(), f.name, f.id, 'store:' + f.id);
+  const total = +r.headers.get('Content-Length') || f.size || 0;
+  let data;
+  if (r.body) {
+    const reader = r.body.getReader(), parts = [];
+    let got = 0;
+    onProgress(0, total);
+    for (;;) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      parts.push(value); got += value.length; onProgress(got, total);
+    }
+    data = new Uint8Array(got);
+    let o = 0; for (const p of parts) { data.set(p, o); o += p.length; }
+  } else data = new Uint8Array(await r.arrayBuffer());
+  return addFace(data, f.name, f.id, 'store:' + f.id);
+}
+function dlProgress(box, got, total) {
+  if (!box) return;
+  const pct = total ? Math.min(100, Math.round(got / total * 100)) : 0, kb = n => Math.round(n / 1024);
+  box.innerHTML = `<div class="box"><b>${t('Downloading… {p}%', {p: pct})}</b>
+    <div class="bar${total ? '' : ' busy'}"><i style="width:${pct}%"></i></div>
+    <p class="hint" style="margin:0">${t('{got} of {total} KB', {got: kb(got), total: kb(total)})}</p></div>`;
 }
 
 function openStore(f) {
   const s = sheet(`<div class="big"><div class="dial" style="background-image:url('${f.preview}')"></div></div>
     <div class="title">${esc(f.name)}</div><div class="meta">${t('Store face #{id}', {id: f.id})} · ${t('{kb} KB', {kb: Math.round(f.size / 1024)})}</div>
     <button class="btn primary" id="di">${t('Download &amp; install')}</button>
-    <button class="btn ghost" id="d">${t('Save to My faces')}</button><div id="job"></div>`);
-  const get = async () => (await getFace('store:' + f.id)) || downloadStore(f);
-  s.querySelector('#d').onclick = async e => {
-    e.target.disabled = true; e.target.textContent = t('Downloading…');
-    try { const x = await get(); closeSheet(); openFace(x); } catch (err) { toast(err.message, true); e.target.disabled = false; }
+    <button class="btn ghost" id="d">${t('Save to My faces')}</button><div id="dlp"></div><div id="job"></div>`);
+  const dlp = s.querySelector('#dlp'), btns = s.querySelectorAll('#d, #di');
+  const get = async () => (await getFace('store:' + f.id)) || downloadStore(f, (got, total) => dlProgress(dlp, got, total));
+  const go = (btn, then) => async () => {
+    btns.forEach(b => b.disabled = true); btn.textContent = t('Downloading…');
+    try { await then(await get()); }
+    catch (err) { dlp.innerHTML = ''; toast(t('Download failed: {e}', {e: err.message}), true); }
+    btns.forEach(b => b.disabled = false);
+    s.querySelector('#di').innerHTML = t('Download &amp; install'); s.querySelector('#d').textContent = t('Save to My faces');
   };
-  s.querySelector('#di').onclick = async e => {
-    e.target.disabled = true; e.target.textContent = t('Downloading…');
-    try { await install(await get()); closeSheet(); } catch (err) { toast(err.message, true); }
-    e.target.disabled = false; e.target.innerHTML = t('Download &amp; install');
-  };
+  s.querySelector('#d').onclick = go(s.querySelector('#d'), x => { closeSheet(); openFace(x); });
+  s.querySelector('#di').onclick = go(s.querySelector('#di'), async x => { dlp.innerHTML = ''; await install(x); closeSheet(); });
 }
 
 // Built-in face 2 is customisable: background photo, time colour/position, two info lines.

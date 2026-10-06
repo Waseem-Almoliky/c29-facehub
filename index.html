@@ -57,6 +57,7 @@ h2:first-child{margin-top:4px}
 input[type=color]{width:36px;height:32px;border:0;background:none;padding:0}
 input[type=number]{background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;width:120px}
 .bar{height:6px;background:#262a2f;border-radius:4px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s}
+.bar.busy i{width:35%!important;animation:busy 1.1s ease-in-out infinite}@keyframes busy{from{transform:translateX(-100%)}to{transform:translateX(300%)}}
 pre{font-size:11px;color:var(--mute);white-space:pre-wrap;margin:6px 0 0;max-height:120px;overflow:auto}
 .toast{position:fixed;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom) + 78px);background:#262a2f;border:1px solid #3a3f45;padding:12px 14px;border-radius:12px;z-index:20;font-size:14px}
 .warn{border-color:#5a4a26;background:#221d12}
