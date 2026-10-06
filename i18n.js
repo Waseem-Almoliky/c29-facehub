@@ -36,6 +36,8 @@
     'Downloading… {p}%': 'جارٍ التنزيل… {p}%',
     '{got} of {total} KB': '{got} من {total} ك.ب',
     'Download failed: {e}': 'فشل التنزيل: {e}',
+    'Retry': 'إعادة المحاولة',
+    'Some previews will not load on this network. Fix: phone Settings → Private DNS → dns.google': 'بعض الصور لا تُحمَّل على هذه الشبكة. الحل: إعدادات الهاتف ← DNS الخاص ← dns.google',
     'Connecting to the store…': 'جارٍ الاتصال بالمتجر…',
     'Loading store…': 'جارٍ تحميل المتجر…',
     'Store face #{id}': 'واجهة من المتجر #{id}',

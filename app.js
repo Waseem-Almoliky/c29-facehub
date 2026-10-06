@@ -57,8 +57,27 @@ function sheet(html) {
 const closeSheet = () => document.querySelectorAll('.sheet-bg').forEach(s => s.remove());
 function card(img, name, sub, onclick, sel) {
   const el = document.createElement('div'); el.className = 'card' + (sel ? ' sel' : '');
-  el.innerHTML = `<div class="dial" style="${img ? `background-image:url('${img}')` : ''}"></div><div class="nm">${esc(name)}</div><div class="sub">${sub || ''}</div>`;
+  el.innerHTML = `<div class="dial"></div><div class="nm">${esc(name)}</div><div class="sub">${sub || ''}</div>`;
+  if (img) dialImage(el.firstChild, img);
   el.onclick = onclick; return el;
+}
+// Preview with automatic retries (store images sometimes fail on flaky connections), then a retry button.
+function dialImage(dial, src, tries = 0) {
+  dial.classList.add('loading'); dial.classList.remove('err');
+  const im = new Image(); im.alt = ''; im.decoding = 'async';
+  // Some requests hang instead of failing; after 12 s cancel and treat it as an error.
+  const timer = setTimeout(() => { im.onload = null; im.src = ''; fail(); }, 12000);
+  im.onload = () => { clearTimeout(timer); dial.classList.remove('loading'); dial.replaceChildren(im); };
+  const fail = () => {
+    clearTimeout(timer); im.onerror = null;
+    if (tries < 2) return setTimeout(() => dialImage(dial, src, tries + 1), 1000 * (tries + 1));
+    dial.classList.remove('loading'); dial.classList.add('err'); previewFailed();
+    const b = document.createElement('button'); b.className = 'retry'; b.innerHTML = `↻<span>${t('Retry')}</span>`;
+    b.onclick = e => { e.stopPropagation(); dialImage(dial, src); };
+    dial.replaceChildren(b);
+  };
+  im.onerror = fail;
+  im.src = src;
 }
 
 // ---------- watch connection ----------
@@ -216,10 +235,22 @@ async function renderStore(m) {
   m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { storeTag = +b.dataset.t; storeShown = 36; render(); });
   if ($('#more')) $('#more').onclick = () => { storeShown += 36; render(); };
   const g = $('#g');
-  list.slice(0, storeShown).forEach(f => g.appendChild(card(f.preview, f.name, have.has('store:' + f.id) ? t('✓ saved') : '', () => openStore(f))));
+  pcStore = location.protocol.startsWith('http') && await hasPc();
+  list.slice(0, storeShown).forEach(f => g.appendChild(card(storePreview(f), f.name, have.has('store:' + f.id) ? t('✓ saved') : '', () => openStore(f))));
 }
 
 // Streams the file so the progress bar shows real bytes received (size from the CDN, else the catalog).
+// Served by PC FaceHub: get previews through it (it reaches MoYoung on a working IP and keeps them on disk).
+let pcStore = false;
+const storePreview = f => pcStore ? `../api/store/preview/${f.id}?url=${encodeURIComponent(f.preview)}` : f.preview;
+// Some home ISPs' DNS sends parts of MoYoung's CDN to a dead address; say how to fix it, once.
+let dnsHinted = false, failedPreviews = 0;
+function previewFailed() {
+  if (++failedPreviews < 3 || dnsHinted || pcStore) return;
+  dnsHinted = true;
+  toast(t('Some previews will not load on this network. Fix: phone Settings → Private DNS → dns.google'), true);
+}
+
 async function downloadStore(f, onProgress = () => {}) {
   const r = await fetch(f.file);
   if (!r.ok) throw new Error('download failed (' + r.status + ')');
@@ -248,7 +279,7 @@ function dlProgress(box, got, total) {
 }
 
 function openStore(f) {
-  const s = sheet(`<div class="big"><div class="dial" style="background-image:url('${f.preview}')"></div></div>
+  const s = sheet(`<div class="big"><div class="dial" style="background-image:url('${storePreview(f)}')"></div></div>
     <div class="title">${esc(f.name)}</div><div class="meta">${t('Store face #{id}', {id: f.id})} · ${t('{kb} KB', {kb: Math.round(f.size / 1024)})}</div>
     <button class="btn primary" id="di">${t('Download &amp; install')}</button>
     <button class="btn ghost" id="d">${t('Save to My faces')}</button><div id="dlp"></div><div id="job"></div>`);
