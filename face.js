@@ -130,7 +130,13 @@ function makeMapper(ref, target, hueWindow = 40) {
 
 /** Most common saturated colour in the preview: the face's accent colour. */
 export function accentColour(d) {
-  const c = previewCanvas(d), px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const c = previewCanvas(d);
+  return accentOf(c.getContext('2d').getImageData(0, 0, c.width, c.height));
+}
+
+/** Accent colour of any picture (ImageData), e.g. a preview PNG. */
+export function accentOf(img) {
+  const px = img.data;
   const count = new Map();
   for (let i = 0; i < px.length; i += 4) {
     const [, s, v] = rgbToHsv(px[i] / 255, px[i + 1] / 255, px[i + 2] / 255);
@@ -157,4 +163,24 @@ export function recolour(d, target, ref = accentColour(d)) {
     }
   }
   return out;
+}
+
+/** Live preview: recolour a picture (ImageData) in place with the same maths as recolour(). */
+export function recolourPixels(img, target, ref) {
+  const fn = makeMapper(ref, hexRgb(target)), px = img.data;
+  for (let i = 0; i < px.length; i += 4) [px[i], px[i + 1], px[i + 2]] = fn([px[i], px[i + 1], px[i + 2]]);
+  return img;
+}
+
+/** Hands back a function colour -> data URL of the recoloured picture (fast: one small image). */
+export function previewer(source) {
+  const c = document.createElement('canvas');
+  c.width = source.naturalWidth || source.width; c.height = source.naturalHeight || source.height;
+  const ctx = c.getContext('2d', {willReadFrequently: true});
+  ctx.drawImage(source, 0, 0);
+  const orig = ctx.getImageData(0, 0, c.width, c.height), ref = accentOf(orig);
+  return colour => {
+    ctx.putImageData(recolourPixels(new ImageData(new Uint8ClampedArray(orig.data), c.width, c.height), colour, ref), 0, 0);
+    return c.toDataURL();
+  };
 }

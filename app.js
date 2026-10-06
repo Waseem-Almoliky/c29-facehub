@@ -329,11 +329,12 @@ function openBackground() {
 function openFace(f) {
   let colour = '#B3AE5E';
   const s = sheet(`<div class="big"><div class="dial" style="background-image:url('${previewUrl(f)}')"></div></div>
+    <div class="pvbar" id="pv" hidden><span>${t('Preview')} <b dir="ltr"></b> · <small>${t('not saved yet')}</small></span><button class="chip" id="pvt">${t('Show original')}</button></div>
     <div class="title">${esc(f.name)}</div><div class="meta">${f.key === pref('installed') ? t('On the watch (slot 8)') : t('{kb} KB', {kb: Math.round(f.data.byteLength / 1024)})}</div>
     <button class="btn primary" id="in">${t('Install on watch')}</button>
     <div id="job"></div>
     <button class="btn ghost" id="fav">${t(f.fav ? '★ Favourite' : '☆ Add to favourites')}</button>
-    <div class="box"><b>${t('Recolour')}</b><p class="hint" style="margin-top:6px">${t("Shifts the face's accent colour and saves a copy.")}</p>
+    <div class="box"><div class="pvhead"><b>${t('Recolour')}</b><div class="dial mini" id="pvmini" hidden></div></div><p class="hint" style="margin-top:6px">${t("Shifts the face's accent colour and saves a copy.")}</p>
       <div class="sw">${SWATCHES.map(c => `<i data-c="${c}" style="background:${c}"></i>`).join('')}<input type="color" id="cc" value="${colour}"></div>
       <button class="btn ghost" id="cpick">${t('📷 Pick colour from a photo')}</button>
       <button class="btn ghost" id="rc" style="margin:0">${t('Make recoloured copy')}</button></div>
@@ -343,14 +344,30 @@ function openFace(f) {
     <button class="btn danger" id="del">${t('Delete')}</button>`);
   s.querySelector('#in').onclick = async e => { e.target.disabled = true; await install(f); e.target.disabled = false; };
   s.querySelector('#fav').onclick = async () => { f.fav = !f.fav; await putFace(f); openFace(f); render(); };
+  // Live preview: recolour just the preview picture as soon as a colour is chosen.
+  const dial = s.querySelector('.big .dial'), pv = s.querySelector('#pv'), mini = s.querySelector('#pvmini');
+  let prev = null, chosen = false, showOrig = false, raf = 0;
+  const im = new Image(); im.onload = () => { prev = face.previewer(im); if (chosen) preview(); }; im.src = previewUrl(f);
+  const preview = () => {
+    chosen = true; if (!prev) return;
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      const url = `url('${prev(colour)}')`;
+      dial.style.backgroundImage = showOrig ? `url('${previewUrl(f)}')` : url; mini.style.backgroundImage = url;
+      pv.hidden = mini.hidden = false; pv.querySelector('b').textContent = colour.toUpperCase();
+      pv.querySelector('b').style.color = colour;
+    });
+  };
+  s.querySelector('#pvt').onclick = e => { showOrig = !showOrig; e.target.textContent = t(showOrig ? 'Show preview' : 'Show original'); preview(); };
   s.querySelectorAll('.sw i').forEach(i => i.onclick = () => {
     colour = i.dataset.c; s.querySelector('#cc').value = colour;
-    s.querySelectorAll('.sw i').forEach(x => x.classList.toggle('on', x === i)); });
-  s.querySelector('#cc').oninput = e => { colour = e.target.value; };
+    s.querySelectorAll('.sw i').forEach(x => x.classList.toggle('on', x === i)); preview(); });
+  s.querySelector('#cc').oninput = e => { colour = e.target.value; s.querySelectorAll('.sw i').forEach(x => x.classList.remove('on')); preview(); };
   s.querySelector('#cpick').onclick = async () => {
     const c = await pickColour({title: t('Recolour from a photo')}); if (!c) return;
     colour = c; s.querySelector('#cc').value = c.toLowerCase();
-    s.querySelectorAll('.sw i').forEach(x => x.classList.remove('on')); toast(t('Picked {c}: tap “Make recoloured copy”', {c})); };
+    s.querySelectorAll('.sw i').forEach(x => x.classList.remove('on')); preview();
+    dial.scrollIntoView({behavior: 'smooth', block: 'center'}); };
   s.querySelector('#rc').onclick = async e => {
     e.target.disabled = true; e.target.textContent = t('Recolouring…');
     await new Promise(r => setTimeout(r, 30));

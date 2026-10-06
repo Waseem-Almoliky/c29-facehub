@@ -99,6 +99,10 @@
     'Face ID saved': 'تم حفظ رقم الواجهة',
     'Tap again to delete': 'اضغط مرة أخرى للحذف',
     'Picked {c}: tap “Make recoloured copy”': 'تم اختيار {c}: اضغط «إنشاء نسخة بلون جديد»',
+    'Preview': 'معاينة',
+    'not saved yet': 'لم تُحفظ بعد',
+    'Show original': 'عرض الأصل',
+    'Show preview': 'عرض المعاينة',
 
     // ----- colour picker -----
     'Colour from a photo': 'لون من صورة',
